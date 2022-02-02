@@ -1,2 +1,2 @@
 # Sepsis_Analysis
-Pipeline for analysis of all surrent sepsis data
+Pipeline for analysis of all current sepsis data
