@@ -11,7 +11,7 @@ require(purrr)
 dir <- "/home/leslie.smith1/blue_kgraim/leslie.smith1/new_SRA_dowloads/snaky/DATASET_READS/"
 dataset <- "GSE131411"
 expression <- readr::read_tsv(paste0(dir,dataset,"/expression_summarized.tsv"))
-#Faheems data located: /home/leslie.smith1/blue_kgraim/leslie.smith1/new_SRA_dowloads/
+#Faheems data located: here("datasets", "Faheem","expression.tsv")
 
 #load reference distribution
 reference <- readr::read_tsv("/home/leslie.smith1/blue_kgraim/leslie.smith1/sepsis/rawData/new/refine_bio_QN_reference.tsv", col_names = FALSE)
@@ -21,10 +21,10 @@ reference.v <- unlist(reference)
 #ensure dataset duplicate genes have been dealt with
 expression <- expression %>% group_by(Symbols) %>% summarise_all(mean)
 expression <- expression[!(is.na(expression$Symbols)),] #get rid of NA row
-dat.matrix <- column_to_rownames(expression,"Symbols")
+dat.matrix <- column_to_rownames(expression,"Gene")
 
 #dat.matrix <- expression[,-1] ## alternate 
-log <- scale(dat.matrix, center = TRUE, scale = TRUE) #scaling here does not affect the output of the quantile normalization, but we do it for consisitency
+log <- scale(dat.matrix, center = TRUE, scale = TRUE) #scaling here does not affect the output of the quantile normalization, 
 qn <- normalize.quantiles.use.target(log,reference.v, copy = TRUE)
 colnames(qn) <- colnames(log)
 rownames(qn) <- rownames(log)
