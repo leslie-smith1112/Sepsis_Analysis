@@ -5,11 +5,12 @@ require(readr)  # for read_csv()
 require(dplyr)  # for mutate()
 require(tidyr)  # for unnest()
 require(purrr)  # for map(), reduce()
-library(here)
 library(plyr)
+library(here)
+
 
 ## analysis ## 
-all <- readr::read_tsv(here("processed-data","Oct91_all_samples_batch_corrected_Combat_log.tsv"))
+all <- readr::read_tsv(here("processed-data","Oct18_all_samples_batch_corrected_Combat_log.tsv"))
 metadata <- readr::read_tsv(here("processed-data", "master_sepsis_metadata_all_samples_add_run_labels.tsv"))
 
 metadata <- metadata[!is.na(metadata$disease_simplified),] #if samples do not have a diagnosis get rid of them so we can make our model matrix
@@ -53,17 +54,27 @@ length(batch.disease)
 
 
 
-write.table(metadata,here("processed-data","Oct91_updated_disease_only_metadata.tsv"),sep = "\t", col.names = TRUE, row.names = FALSE)
+write.table(metadata,here("processed-data","Oct18_updated_disease_only_metadata.tsv"),sep = "\t", col.names = TRUE, row.names = FALSE)
 to_write <- rownames_to_column(all,"Gene")
 to_write[1:5,1:5]
-write.table(to_write,here("processed-data","Oct91_updated_disease_only_expr_batch_corrected_logged.tsv"),sep = "\t", col.names = TRUE, row.names = FALSE)
+dim(to_write)
+write.table(to_write,here("processed-data","Oct18_updated_disease_only_expr_batch_corrected_logged_Faheem1.tsv"),sep = "\t", col.names = TRUE, row.names = FALSE)
 batch.dat <- data.frame(batch.disease, names(batch.disease))
 head(batch.dat)
 colnames(batch.dat) <- c("Batch","Sample")
 write.table(batch.dat,here("processed-data","Oct91_updated_disease_only_batch_ids.tsv"),sep = "\t", col.names = TRUE, row.names = FALSE)
 
 
-
+dat_adjusted_norm_transposed <- t(all)
+metadata
+# - get rid of 0 values - 0
+dat_adjusted_norm_pcaMat <- dat_adjusted_norm_transposed[ , which(apply(dat_adjusted_norm_transposed, 2, var) != 0)]
+set.seed(417)
+dat_pca <- prcomp(dat_adjusted_norm_pcaMat, center = TRUE, scale. = TRUE)
+dtp <- data.frame("Series"=metadata$series, 'Health' = metadata$disease_simplified, 'accession' = metadata$geo_accession,"dat" = dat_pca$x[,1:2])
+library(ggplot2)
+q <- ggplot(data=dtp, aes(x=dat.PC1, y=dat.PC2, color=Health)) + geom_point() + ggtitle("Sepsis PCA Batch Corrected All Samples") + labs(y= "PC2", x = "PC1")
+q
 
 
 

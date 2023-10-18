@@ -8,19 +8,18 @@ require(purrr)  # for map(), reduce()
 library(here)
 
 
-all <- readr::read_tsv(here("processed-data","Oct8_master_expression_nonnormalized.tsv"))
+all <- readr::read_tsv(here("processed-data","Oct18_master_expression_nonnormalized.tsv"))
+dim(all)
 batch.ids.temp <- readr::read_tsv(here("processed-data","master_batch_ids.tsv"))
 batch.ids <- batch.ids.temp$batch.ids
 names(batch.ids) <- batch.ids.temp$Sample
 head(batch.ids)
-head(temp_batch)
 length(batch.ids)
 metadata <- readr::read_tsv(here("processed-data", "master_sepsis_metadata_all_samples_add_run_labels.tsv"))
 
 # make sure batch.ids, metadata, and expression matrix all have consistent samples 
 batch.ids <- batch.ids[names(batch.ids) %in% colnames(all)]
 length(batch.ids)
-dim(expression_dat)
 all <- column_to_rownames(all, "Gene")
 all[1:5,1:5]
 min(all)
@@ -90,6 +89,11 @@ p
 
 
 ##################BATCH CORRECTION FOR ALL SAMPLES ####################
+
+##
+batch.ids[grep("run",batch.ids)] <- "Faheem"
+
+
 # - define model matrix in metadata - #
 dim(meta.data)
 dim(all)
@@ -126,9 +130,25 @@ dim(design)
 raw_merged <- as.matrix(all - min(all))
 library(sva)
 dat_batch_adjusted_norm_new <- ComBat(raw_merged, batch.ids, mod = design)
+
+## additional batch correction for batches
+batch.ids.temp <- readr::read_tsv(here("processed-data","master_batch_ids.tsv"))
+batch.ids <- batch.ids.temp$batch.ids
+names(batch.ids) <- batch.ids.temp$Sample
+head(batch.ids)
+head(temp_batch)
+length(batch.ids)
+batch.ids <- batch.ids[colnames(all)]
+length(batch.ids)
+all.equal(names(batch.ids), colnames(all))
+
+raw_merged <- as.matrix(dat_batch_adjusted_norm_new - min(dat_batch_adjusted_norm_new))
+dat_batch_adjusted_norm_new <- ComBat(raw_merged, batch.ids, mod = design)
+
+
 dat_batch_adjusted_norm_new <- as.data.frame(dat_batch_adjusted_norm_new)
 to_write <- rownames_to_column(dat_batch_adjusted_norm_new,"Gene")
-write.table(to_write,here("processed-data","Oct91_batch_corrected_all_samples.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
+write.table(to_write,here("processed-data","Oct18_batch_corrected__all_samples.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
 # dat_batch_adjusted_norm_new <- readr::read_tsv(here("processed-data","Oct9_batch_corrected_all_samples.tsv")) - # forgot to write pCA to file 
 # dat_batch_adjusted_norm_new[1:5,1:5]
 # dat_batch_adjusted_norm_new <- column_to_rownames(dat_batch_adjusted_norm_new, "Gene")
@@ -140,6 +160,7 @@ dat_adjusted_norm_pcaMat <- dat_adjusted_norm_transposed[ , which(apply(dat_adju
 set.seed(417)
 dat_pca <- prcomp(dat_adjusted_norm_pcaMat, center = TRUE, scale. = TRUE)
 dtp <- data.frame("Series"=temp.meta$series, 'Health' = temp.meta$disease_simplified, 'accession' = temp.meta$geo_accession,"dat" = dat_pca$x[,1:2])
+library(ggplot2)
 q <- ggplot(data=dtp, aes(x=dat.PC1, y=dat.PC2, color=Series)) + geom_point() + ggtitle("Sepsis PCA Batch Corrected All Samples") + labs(y= "PC2", x = "PC1")
 q
 
@@ -148,11 +169,11 @@ min(dat_batch_adjusted_norm_new)
 dat <- dat_pca$x
 dat <- as.data.frame(dat_pca$x)
 dat <- rownames_to_column(dat,"Sample")
-write.table(dat, here("processed-data","Oct91_batch_corrected_PCA_Combat_not_logged.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
-dat_batch_adjusted_norm_new <- log2(dat_batch_adjusted_norm_new + 5747)
+write.table(dat, here("processed-data","Oct18_batch_corrected_PCA_Combat_not_logged.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
+dat_batch_adjusted_norm_new <- log2(dat_batch_adjusted_norm_new + 82)
 dat_batch_adjusted_norm_new <- as.data.frame(dat_batch_adjusted_norm_new)
 to_write <- rownames_to_column(dat_batch_adjusted_norm_new, "Gene")
-write.table(to_write, here("processed-data","Oct91_all_samples_batch_corrected_Combat_log.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
+write.table(to_write, here("processed-data","Oct18_all_samples_batch_corrected_Combat_log.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
 
 ##################BATCH CORRECTION DISEASE####################
 

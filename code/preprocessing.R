@@ -7,20 +7,14 @@ require(purrr)  # for map(), reduce()
 library(plyr)
 library(here)
 
-
+## microarray studies: 
+## RNA studies: 
 ## preprocessing ## 
 ###############################READ IN DATA###############################
 ##GEO DATASETS##
-normalized <- c("EMTAB1548","EMTAB4421","GSE100159", "GSE106878","GSE131761","GSE69063","GSE13015")
-new.names <- here("datasets", normalized, paste0(normalized, "_map_noQN.tsv"))
-all(file.exists(new.names))
-normfiles <- lapply(new.names, readr::read_tsv)
-
-# - get batch.ids - one is subtracted to account for the gene name column - #
-norm.batch.ids <- unlist(sapply(seq_along(normalized), function(i) {rep(normalized[i],ncol(normfiles[[i]])-1)} ))
 
 # - read in quantile normalized file for GEO samples- #
-new.dirs <- c("GSE131411","GSE154918","GSE185263","GSE32707")
+new.dirs <- c("GSE131411","GSE154918","GSE185263","EMTAB1548","EMTAB4421","GSE100159", "GSE106878","GSE131761","GSE69063","GSE13015","GSE32707")
 base_file <- "_QN_new_sepsis.tsv"
 new.names <- here("datasets", new.dirs, paste0(new.dirs, "_QN_new_sepsis.tsv"))
 all(file.exists(new.names))
@@ -28,24 +22,15 @@ newfiles <- lapply(new.names, readr::read_tsv)
 
 # - get batch.ids - one is subtracted to account for the gene name column - #
 new.batch.ids <- unlist(sapply(seq_along(new.dirs), function(i) {rep(new.dirs[i],ncol(newfiles[[i]])-1)} ))
-
-norm.dat <- normfiles %>% purrr::reduce(inner_join)
-dim(norm.dat)
+length(new.batch.ids)
 
 # - reduce to common genes - #
 new.dat <- newfiles %>% purrr::reduce(inner_join)
-dim(new.dat)#6769 x 1694
+dim(new.dat)
 
-#combien expression matrices 
-all <- merge(new.dat, norm.dat, by.x = "Gene", by.y = "hgnc_symbol")
-dim(all)
-new.dat <- all
 #make Gene rownames so that they are used as names for the batch ids
 new.dat <- column_to_rownames(new.dat, "Gene") 
-
-new.batch.ids <- c(new.batch.ids, norm.batch.ids)
-length(new.batch.ids)
-# - add sample names to batch ids
+new.dat[1:5,1:5]
 names(new.batch.ids) <- colnames(new.dat)
 
 # - we lose the below sample because there is a type in the metadata downloaded from GEO, this should keep it - #
@@ -101,17 +86,7 @@ all <- all %>% dplyr::select(-SR191) # get rid of this sample becuase of low qua
 f.dat <- readr::read_tsv(here("datasets", "Faheem","batch_ids.tsv"))
 f.batch.ids <- f.dat$run
 names(f.batch.ids) <- f.dat$sample
-batch.ids <- c(old.batch.ids, new.batch.ids, f.batch.ids)
-######## TEMP ADD TO PLOT GENES ##########
-all_t <- t(all)
-all_t[1:5,1:5]
-dim(all_t)
-#randomly select genes to check the distribution
-A4GNT <- all_t[,1]
-ZNF211 <- all_t[,4800]
-hist(A4GNT)
-hist(ZNF211)
-
+batch.ids <- c(old.batch.ids, new.batch.ids,f.batch.ids)
 expression_dat <- all
 #########################################
 ## edit the ids from the datasets we reprocessed through SRA ## 
@@ -122,7 +97,7 @@ length(batch.ids)
 #for datasets we processed through SRA we used the GEO Ids in the metadata file but now our matrices have the SRR Ids - so we change that here
 GSE131411_meta <- read_csv(here("datasets","GSE131411","GSE131411_metadata.txt"))
 sample_map <- GSE131411_meta %>% dplyr::select(Run, `GEO_Accession (exp)`)
-#mulitple samples map to the same sample - we will select second occurence (had greater coverage), we have tried taking mean of samples but no dice
+
 #several sample here map to the same GSE ID - we take the second run because there was more coverage 
 dupsss <- sample_map$`GEO_Accession (exp)`[duplicated(sample_map$`GEO_Accession (exp)`)]
 sample_temp <- sample_map[sample_map$`GEO_Accession (exp)` %in% dupsss,]
@@ -162,9 +137,9 @@ temp_batch <- batch.ids[names(batch.ids) %in% colnames(expression_dat)]
 length(temp_batch)
 to_write_batch <- data.frame(temp_batch, names(temp_batch))
 colnames(to_write_batch) <- c("batch.ids", "Sample")
-write.table(to_write_batch, here("processed-data","master_batch_ids.tsv"), sep = "\t", row.names = FALSE)
+write.table(to_write_batch, here("processed-data","master_batch_ids_microarray_vs_rnaseq.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
 expression_dat <- rownames_to_column(expression_dat, "Gene")
-write.table(expression_dat, here("processed-data","Oct8_master_expression_nonnormalized.tsv"), sep = "\t",col.names = TRUE, row.names = FALSE)
+write.table(expression_dat, here("processed-data","Oct18_master_expression_nonnormalized.tsv"), sep = "\t",col.names = TRUE, row.names = FALSE)
 
 # expression_logged <- column_to_rownames(expression_dat, "Gene")
 # expression_logged[1:5,1:5]
