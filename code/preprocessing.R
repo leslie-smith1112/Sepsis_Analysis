@@ -1,3 +1,5 @@
+#Read in all datasets and metadata and put them into 1 common expression matrix and 1 common metadata file.
+
 # Load libraries
 require(tibble) # dataframe manipulation
 require(readr)  # for read_csv()
@@ -7,12 +9,8 @@ require(purrr)  # for map(), reduce()
 library(plyr)
 library(here)
 
-## microarray studies: 
-## RNA studies: 
-## preprocessing ## 
 ###############################READ IN DATA###############################
 ##GEO DATASETS##
-
 # - read in quantile normalized file for GEO samples- #
 new.dirs <- c("GSE131411","GSE154918","GSE185263","EMTAB1548","EMTAB4421","GSE100159", "GSE106878","GSE131761","GSE69063","GSE13015","GSE32707")
 base_file <- "_QN_new_sepsis.tsv"
@@ -28,7 +26,7 @@ length(new.batch.ids)
 new.dat <- newfiles %>% purrr::reduce(inner_join)
 dim(new.dat)
 
-#make Gene rownames so that they are used as names for the batch ids
+#make Gene rownames so that they aren't used as names for the batch ids
 new.dat <- column_to_rownames(new.dat, "Gene") 
 new.dat[1:5,1:5]
 names(new.batch.ids) <- colnames(new.dat)
@@ -74,8 +72,10 @@ old.batch.ids <- old.batch.ids[colnames(dat)]
 dat <- rownames_to_column(dat, "Gene")
 dim(dat)
 
-# - put old and new together - #
+# - put all datasets together - #
 faheem<- readr::read_tsv(here("datasets", "Faheem","expression_QN_new_sepsis.tsv"), col_names = TRUE)
+to_name <- colnames(faheem)
+to_name <- to_name[-1]
 all <- merge(x = dat, y = new.dat, by = "Gene")
 all <- merge(all, faheem, by = "Gene")
 all <- column_to_rownames(all, "Gene")
@@ -83,13 +83,13 @@ dim(all)
 all <- all %>% dplyr::select(-SR191) # get rid of this sample becuase of low quality (from Dongyuan)
 
 # - put all batch.ids together - # 
-f.dat <- readr::read_tsv(here("datasets", "Faheem","batch_ids.tsv"))
-f.batch.ids <- f.dat$run
-names(f.batch.ids) <- f.dat$sample
+f.batch.ids <- rep("UF_Faheem",(ncol(faheem)-1)) #all faheems runs are viewed as 1 (aka not seperated by run)
+names(f.batch.ids) <- to_name
 batch.ids <- c(old.batch.ids, new.batch.ids,f.batch.ids)
 expression_dat <- all
+
 #########################################
-## edit the ids from the datasets we reprocessed through SRA ## 
+## edit the ids from the datasets we reprocessed through SRA ## - they have SRA names instead of GEO names used in metadata
 length(batch.ids)
 batch.ids <- batch.ids[!(batch.ids %in% c("GSE131411","GSE154918","GSE185263"))]
 length(batch.ids)
@@ -137,7 +137,7 @@ temp_batch <- batch.ids[names(batch.ids) %in% colnames(expression_dat)]
 length(temp_batch)
 to_write_batch <- data.frame(temp_batch, names(temp_batch))
 colnames(to_write_batch) <- c("batch.ids", "Sample")
-write.table(to_write_batch, here("processed-data","master_batch_ids_microarray_vs_rnaseq.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
+write.table(to_write_batch, here("processed-data","master_batch_ids_faheem_same_run.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
 expression_dat <- rownames_to_column(expression_dat, "Gene")
 write.table(expression_dat, here("processed-data","Oct18_master_expression_nonnormalized.tsv"), sep = "\t",col.names = TRUE, row.names = FALSE)
 

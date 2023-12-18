@@ -7,15 +7,17 @@ library(plyr)
 require(purrr)  # for map(), reduce()
 library(here)
 
-
 all <- readr::read_tsv(here("processed-data","Oct18_master_expression_nonnormalized.tsv"))
 dim(all)
-batch.ids.temp <- readr::read_tsv(here("processed-data","master_batch_ids.tsv"))
+batch.ids.temp <- readr::read_tsv(here("processed-data","master_batch_ids_faheem_same_run.tsv"))
 batch.ids <- batch.ids.temp$batch.ids
 names(batch.ids) <- batch.ids.temp$Sample
 head(batch.ids)
 length(batch.ids)
 metadata <- readr::read_tsv(here("processed-data", "master_sepsis_metadata_all_samples_add_run_labels.tsv"))
+
+#treat faheems samples as 1 batch
+metadata$series[grep("run",metadata$series)] <- "UF_Faheem"
 
 # make sure batch.ids, metadata, and expression matrix all have consistent samples 
 batch.ids <- batch.ids[names(batch.ids) %in% colnames(all)]
@@ -89,11 +91,6 @@ p
 
 
 ##################BATCH CORRECTION FOR ALL SAMPLES ####################
-
-##
-batch.ids[grep("run",batch.ids)] <- "Faheem"
-
-
 # - define model matrix in metadata - #
 dim(meta.data)
 dim(all)
@@ -131,19 +128,19 @@ raw_merged <- as.matrix(all - min(all))
 library(sva)
 dat_batch_adjusted_norm_new <- ComBat(raw_merged, batch.ids, mod = design)
 
-## additional batch correction for batches
-batch.ids.temp <- readr::read_tsv(here("processed-data","master_batch_ids.tsv"))
-batch.ids <- batch.ids.temp$batch.ids
-names(batch.ids) <- batch.ids.temp$Sample
-head(batch.ids)
-head(temp_batch)
-length(batch.ids)
-batch.ids <- batch.ids[colnames(all)]
-length(batch.ids)
-all.equal(names(batch.ids), colnames(all))
-
-raw_merged <- as.matrix(dat_batch_adjusted_norm_new - min(dat_batch_adjusted_norm_new))
-dat_batch_adjusted_norm_new <- ComBat(raw_merged, batch.ids, mod = design)
+# ## additional batch correction for batches
+# batch.ids.temp <- readr::read_tsv(here("processed-data","master_batch_ids.tsv"))
+# batch.ids <- batch.ids.temp$batch.ids
+# names(batch.ids) <- batch.ids.temp$Sample
+# head(batch.ids)
+# head(temp_batch)
+# length(batch.ids)
+# batch.ids <- batch.ids[colnames(all)]
+# length(batch.ids)
+# all.equal(names(batch.ids), colnames(all))
+# 
+# raw_merged <- as.matrix(dat_batch_adjusted_norm_new - min(dat_batch_adjusted_norm_new))
+# dat_batch_adjusted_norm_new <- ComBat(raw_merged, batch.ids, mod = design)
 
 
 dat_batch_adjusted_norm_new <- as.data.frame(dat_batch_adjusted_norm_new)

@@ -36,6 +36,7 @@ meta <- meta.dat[meta.dat$endotype_class %in% temp,]
 dim(meta)
 
 train_meta <- meta %>% dplyr::select(geo_accession, endotype_class)
+dim(train_meta)
 
 expression_train <- expression.dat[rownames(expression.dat) %in% train_meta$geo_accession,]
 dim(expression_train)
@@ -44,52 +45,26 @@ expression_train <- rownames_to_column(as.data.frame(expression_train), "geo_acc
 expression_train[1:5,1:5]
 training_dat <- merge(expression_train, train_meta, by="geo_accession")
 training_dat[1:5,1:5]
-head(training_dat$)
+head(training_dat$endotype_class)
+training_dat <- column_to_rownames(training_dat, "geo_accession")
 
-test_meta <- meta.dat[!(meta.dat$geo_accession %in% train$geo_accession),]
+##test set 
+test_meta <- meta.dat[!(meta.dat$geo_accession %in% train_meta$geo_accession),]
 dim(test_meta)
-table(test_meta$ARDs)
-test_meta$ARDs[test_meta$ARDs %in% temp] <- "ARDs"
-test_meta <- test_meta  %>% select(geo_accession, ARDs) ## test metadata here 
-test_meta$ARDs[is.na(test_meta$ARDs)] <- "noARDS"
-table(test_meta$ARDs)
-expression.test <- expression.test[rownames(expression.test) %in% test_meta$geo_accession,]
-dim(expression.test)
-expression.test[1:2, 4875:4878]
-expression.test <- as.data.frame(expression.test)
-expression.test[1:5,1:5]
-expression.test <- rownames_to_column(expression.test, "Gene")
-expression_matrix <- merge(expression.test, test_meta, by.x = "Gene", by.y = "geo_accession")
-dim(expression_matrix)
-expression_matrix <- column_to_rownames(expression_matrix, "Gene")
-expression_matrix[1:5,1:5]
-dim(expression_matrix)
+expression_test <- expression.dat[rownames(expression.dat) %in% test_meta$geo_accession,]
+expression_test[1:5,1:5]
 
-expression.dat <- as.data.frame(expression.train)
-expression.dat[1:5,1:5]
-expression.dat <- rownames_to_column(expression.dat, "Gene")
-expression_matrix <- merge(expression.dat, train, by.x = "Gene", by.y = "geo_accession")
-dim(expression_matrix)
-expression_matrix <- column_to_rownames(expression_matrix, "Gene")
-expression_matrix[1:5,1:5]
 
-dim(expression_matrix)
-expression_matrix[1:2, 4875:4879]
-## expects matrix with samples as column names 
+## expects matrix with samples as row names 
 ## -- trim expression matrix to the selected samples and genes for current run --  ##
 ## result is genes x sample matrix
-in.matrix <- expression_matrix
-en.mix <- 1
-directory <- here("model_results")
-out_file <- "ARDs_prediction"
 
-elasticnet.run(expression_matrix, directory, out_file = out_file, en.mix, seed=4831,"ARDs")
 ## expects matrix with samples as row names 
-elasticnet.run <- function(in.matrix, directory, out_file, en.mix, seed=4831, ARDs){
+elasticnet.run <- function(in.matrix, directory, out_file, en.mix, seed=4831, endotype_class){
   print(en.mix)
   set.seed(seed)
   
-  split <- initial_split(in.matrix, strata = ARDs)
+  split <- initial_split(in.matrix, strata = endotype_class)
   train <- training(split)
   test <- testing(split)
   
@@ -98,7 +73,7 @@ elasticnet.run <- function(in.matrix, directory, out_file, en.mix, seed=4831, AR
   
   #validation set 
   val_set <- validation_split(train,
-                              strata = ARDs,
+                              strata = endotype_class,
                               prop = 0.80)
   ### logistic regression ###
   ### set model - we will tune the penalty mixture of elasticnet is passed in ###
@@ -109,10 +84,7 @@ elasticnet.run <- function(in.matrix, directory, out_file, en.mix, seed=4831, AR
   
   ### create recipe, remove indicator values that only contain 0 and noramlize the predictors ###
   rec <-
-    recipe(ARDs ~ ., data = train) 
-  #%>%
-  # step_zv(all_predictors()) %>%
-  # step_normalize(all_predictors())
+    recipe(endotype_class ~ ., data = train) 
   
   #### create workflow ###
   lr_wf <- workflow() %>%
@@ -155,26 +127,6 @@ elasticnet.run <- function(in.matrix, directory, out_file, en.mix, seed=4831, AR
     arrange(penalty) %>% 
     dplyr::slice(row)
   
-  #------commented out for library issues, only code for confusion matrix------------- After tuning to get confusion matrix ---------------#
-  ####TEMPORARILY COMMENTED OUT BECAUSE OF SPEC MASKING ISSUES #####
-  # lr_res <-
-  #   lr_wf %>%
-  #   tune_grid(val_set,
-  #             grid = lr_reg_grid,
-  #             control = control_grid(save_pred = TRUE), #save model predictions
-  #             metrics = yardstick::metric_set(spec)) #run this second round to get specificity
-  # print("best")
-  # #for spec
-  # lr_auc <-
-  #   lr_res %>%
-  #   collect_predictions(parameters = lr_best)
-  # 
-  # predicted <- lr_auc$.pred_class
-  # actual <- lr_auc$subtype
-  # confusion_matrix <- table(predicted,actual) #want this printed out
-  # out_matrix <- paste0(directory, "/", out_file,"_confusion_matrix.txt")
-  # write.table(confusion_matrix, file = out_matrix, col.names = T)
-  
   
   #========================LAST FIT =======================================
   #last fit 
@@ -208,57 +160,35 @@ elasticnet.run <- function(in.matrix, directory, out_file, en.mix, seed=4831, AR
   write_rds(my_model, paste0(directory,"/",out_file, "_EN_model.rds"))
   return(my_model)
 }
+in.matrix <- training_dat
+en.mix <- 1
+directory <- here("model_results")
+out_file <- "HypoNormo_prediction_1_penalty"
 
-model.metrics(my_model = my_model, dat = expression.test, directory = here("model_results"), out_file = "ARDsvalidation", "ARDs","noARDS")
-model.metrics <- function(my_model, dat, directory, out_file, subtype1, subtype2)
-{
-  pred_prob <- predict(my_model, dat, type = "prob")
-  pred_class <- predict(my_model, dat, type = "class")
-  results <- dat %>% dplyr::select(ARDs) %>% bind_cols(pred_class, pred_prob)
-  results <- rownames_to_column(results, "sample_id")
-  write.table(results, paste0(directory,"/", out_file,"_results.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
-  # new.res1 <- bind_cols(dat$subtype, results$.pred_Basal, results$.pred_Luminal, results$.pred_class)
-  # colnames(new.res) <- c("subtype", ".pred_Basal", ".pred_Luminal", ".pred_class")
-  new.res <- bind_cols(dat$ARDs, results[,3], results[,4], results$.pred_class)
-  colnames(new.res) <- c("ARDs", paste0(".pred_ARDs"), paste0(".pred_noARDs"), ".pred_class")
-  confusion <- conf_mat(results, truth = ARDs,estimate = .pred_class)
-  results$ARDs <- as.factor(results$ARDs)
-  confusion
-  conf.df <- as.data.frame(confusion$table)
-  write_delim(conf.df, paste0(directory,"/", out_file,"_confusion_matrix.tsv"), delim  = "\t")
-  #auc <- roc_auc(new.res, truth = subtype, estimate = .pred_Basal)
-  auc <- roc_auc(new.res, ARDs, paste0(".pred_ARDs")) 
-  new.res$ARDs <- as.factor(new.res$ARDs)
-  #- all can be put in 1 matrix - #
-  senss <- yardstick::sens(results,  ARDs, .pred_class)
-  specc <- yardstick::spec(results,  ARDs,  .pred_class)
-  acc <- accuracy(results,  ARDs, .pred_class)
-  prec <- yardstick::precision(results,  ARDs, .pred_class)
-  re <- yardstick::recall(results, ARDs, .pred_class)
-  f <- yardstick::f_meas(results, ARDs, .pred_class)
-  kapp <- kap(results,  ARDs, .pred_class)
-  mccc <- mcc(results, ARDs, .pred_class)
-  metrics <- rbind(auc, acc, senss, specc, prec, re, f, kapp, mccc)
-  print(metrics)
-  write.table(metrics,paste0(directory,"/", out_file,"_metrics.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
-  #return(metrics)
-}
-## MODEL METRICS FOR SUBSAHARAN AFRICAN VALIDATION SET:
-# model.metrics <- function(my_model, dat, directory, out_file, subtype1, subtype2)
-# {
-#   pred_prob <- predict(my_model, dat, type = "prob")
-#   pred_class <- predict(my_model, dat, type = "class")
-#   results <- dat %>% dplyr::select(subtype) %>% bind_cols(pred_class, pred_prob)
-#   results <- rownames_to_column(results, "sample_id")
-#   write.table(results, paste0(directory,"/", out_file,"_results.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
-#   false_negative <- nrow(results[results$.pred_class == "Luminal",])
-#   true_positive <- nrow(results[results$.pred_class == "Basal",])
-#   rec <- true_positive/(true_positive + false_negative)
-# 
-#   prec <- true_positive/(true_positive + 0)
-#   to.write <- data.frame(c("Recall", "Precision") ,c(rec, prec))
-#   write.table(to.write, paste0(directory,"/", out_file,"_results.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
-# }
+my_model <- elasticnet.run(training_dat, directory, out_file = out_file, en.mix, seed=4831,"endotype_class")
+result <- predict(my_model, expression_test)
+
+predicted_pheno <- data.frame("geo_accession"  = rownames(expression_test), "endotype_class" = result$.pred_class)
+write.table(predicted_pheno, here("model_results",paste0(out_file,"phenotype_predictions.tsv")), sep= "\t", col.names = TRUE, row.names = FALSE)
+sig <- readr::read_tsv(here("model_results",paste0(out_file,"_all_sig.txt")))
+
+genes <- c("CYP51A1","CYP4F2","LDLR","DHCR24","DHCR7","MSMO1","HMGCR","PCSK9","FDFT1","SQLE","ALOX5", "LSS","LCAT","LBR","CYP4Z1",
+           "KCNH7", "CYP4X1","CYP46A1","APOA1","EBP","CYP4V2", "CYP39A1","SCARB1","HSD17B7","CYP4F22","ALOX15","ABCG1","NSDHL", "CYP4F12","ALOX12",
+           "ABCA1","CYP4F11", "LOX","LIPE","TM7SF2","CYP4F8","PTGS1","LPA","LBR","CYP4F3","APOB","LBP","CETP","CYP4B1","CYP4A11",
+           "FDFT1","LCAT","CYP4A22","PLTP","PTGS2")
+
+common <- sig[sig$Variable %in% genes,]
+dim(common)
+
+
+predicted <- readr::read_tsv(here("model_results","HypoNormo_prediction_05_penaltyphenotype_predictions.tsv"))
+head(train_meta)
+head(predicted)
+
+all <- rbind(predicted, train_meta)
+write.table(all, here("model_results","all_phenotypes.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
+
+
 
 
 

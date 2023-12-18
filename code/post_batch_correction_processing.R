@@ -10,8 +10,9 @@ library(here)
 
 
 ## analysis ## 
-all <- readr::read_tsv(here("processed-data","Oct18_all_samples_batch_corrected_Combat_log.tsv"))
+all <- readr::read_tsv(here("processed-data","Oct18_batch_corrected__all_samples.tsv"))
 metadata <- readr::read_tsv(here("processed-data", "master_sepsis_metadata_all_samples_add_run_labels.tsv"))
+metadata$series[grep("run",metadata$series)] <- "UF_Faheem"
 
 metadata <- metadata[!is.na(metadata$disease_simplified),] #if samples do not have a diagnosis get rid of them so we can make our model matrix
 dim(metadata)
@@ -58,11 +59,11 @@ write.table(metadata,here("processed-data","Oct18_updated_disease_only_metadata.
 to_write <- rownames_to_column(all,"Gene")
 to_write[1:5,1:5]
 dim(to_write)
-write.table(to_write,here("processed-data","Oct18_updated_disease_only_expr_batch_corrected_logged_Faheem1.tsv"),sep = "\t", col.names = TRUE, row.names = FALSE)
+write.table(to_write,here("processed-data","Oct18_updated_disease_only_expr_batch_corrected_not_logged_Faheem1.tsv"),sep = "\t", col.names = TRUE, row.names = FALSE)
 batch.dat <- data.frame(batch.disease, names(batch.disease))
 head(batch.dat)
 colnames(batch.dat) <- c("Batch","Sample")
-write.table(batch.dat,here("processed-data","Oct91_updated_disease_only_batch_ids.tsv"),sep = "\t", col.names = TRUE, row.names = FALSE)
+write.table(batch.dat,here("processed-data","Oct18_updated_disease_only_batch_ids.tsv"),sep = "\t", col.names = TRUE, row.names = FALSE)
 
 
 dat_adjusted_norm_transposed <- t(all)

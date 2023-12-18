@@ -30,6 +30,8 @@ library(apeglm)
 library(ggplot2)
 set.seed(12345)
 
+
+
 ## read in sample expression and ancestry data ## 
 # expression <- readr::read_tsv("/home/leslie.smith1/blue_kgraim/leslie.smith1/phyloFrame/diseases/breast/brca_data_mrna_seq_v2_rsem.txt", col_names = TRUE)
 # clinical <- readr::read_tsv("/home/leslie.smith1/blue_kgraim/leslie.smith1/phyloFrame/diseases/breast/brca_tcga_pan_can_atlas_2018_clinical_data.tsv", col_names = TRUE)
@@ -159,9 +161,13 @@ set.seed(12345)
 # write.table(commongsea_result_df, "/home/leslie.smith1/blue_kgraim/leslie.smith1/phyloFrame/PAPER/common_sig_GSEA.tsv", sep = "\t", col.names = TRUE, row.names = TRUE)
 
 ##
+genes <- c("CYP51A1","CYP4F2","LDLR","DHCR24","DHCR7","MSMO1","HMGCR","PCSK9","FDFT1","SQLE","ALOX5", "LSS","LCAT","LBR","CYP4Z1",
+           "KCNH7", "CYP4X1","CYP46A1","APOA1","EBP","CYP4V2", "CYP39A1","SCARB1","HSD17B7","CYP4F22","ALOX15","ABCG1","NSDHL", "CYP4F12","ALOX12",
+           "ABCA1","CYP4F11", "LOX","LIPE","TM7SF2","CYP4F8","PTGS1","LPA","LBR","CYP4F3","APOB","LBP","CETP","CYP4B1","CYP4A11",
+           "FDFT1","LCAT","CYP4A22","PLTP","PTGS2")
 
-
-
+temp <- readr::read_tsv(here("processed-data", "Oct19_cluster1VScluster2_DE_results.tsv"))
+faheem_genes <- temp[temp$Gene %in% genes,]
 #################################################################################
 ## FUNCTION FOR DIFFERENTIAL EXPRESSION ANALYSIS - 
 #################################################################################
@@ -172,13 +178,14 @@ library(msigdbr)
 library(magrittr)
 library(EnhancedVolcano)
 library(apeglm)
+library(here)
 library(ggplot2)
 set.seed(12345)
 
 #################################################################################
 ## READ IN ALL EXPRESSION DATA AND METADATA INFORMATION 
-meta.dat<- readr::read_tsv(here("processed-data", "Oct91_updated_disease_only_metadata_clusters.tsv"))
-expression.dat <- readr::read_tsv(here("processed-data","Oct91_updated_disease_only_expr_batch_corrected_logged.tsv"))
+meta.dat<- readr::read_tsv(here("processed-data", "Oct18_updated_disease_only_metadata_clusters.tsv"))
+expression.dat <- readr::read_tsv(here("processed-data","Oct18_updated_disease_only_expr_batch_corrected_not_logged_Faheem1.tsv"))
 expression.dat[1:5,1:5]
 expression.dat <- column_to_rownames(expression.dat, "Gene")
 expression.dat[1:5,1:5]
@@ -188,18 +195,30 @@ expression.dat[1:5,1:5]
 # expression.dat[1:5,1:5]
 
 meta_hold <- meta.dat
-meta.dat <- meta_hold %>% dplyr::select("geo_accession","2_clusters")
+meta.dat <- meta_hold %>% dplyr::select("geo_accession","Cluster")
 head(meta.dat)
 colnames(meta.dat) <- c("sample_id","subtype")
 
-reorder_idx <- match(colnames(exression.dat),meta.dat$sample_id) 
-meta.dat <- meta.dat[reorder_idx,]
+meta.hold <- meta.dat
+#Cluster 1 vs Cluster 2
+meta.dat <- meta.hold[meta.hold$subtype != "Cluster3",]
+hold.dat <- expression.dat
+expression.dat <- hold.dat[,colnames(hold.dat) %in% meta.dat$sample_id]
+dim(expression.dat)
 
+#Cluster 2 vs Cluster 3
+meta.dat <- meta.hold[meta.hold$subtype != "Cluster3",]
+hold.dat <- expression.dat
+expression.dat <- hold.dat[,colnames(hold.dat) %in% meta.dat$sample_id]
+dim(expression.dat)
+
+#Cluster 1 vsCluster 3
+
+reorder_idx <- match(colnames(expression.dat),meta.dat$sample_id) 
+meta.dat <- meta.dat[reorder_idx,]
 ## MAKE MODIFICATION TO DATA IF YOU NEED TO, WE NEED:
 ## gene expression matrix with samples as column names and gene as rownames 
 ## metadata is n x 2 (rows x columns) containing sample ID in the first column and subtype (EX: disease vs not)
-
-
 ###check that the column names of your expression matrix are same order as the samples in the metadata matrix
 all.equal(colnames(expression.dat), meta.dat$sample_id) ## CHANGE HERE
 # make sure subtype is a factor
@@ -208,8 +227,6 @@ meta.dat$subtype <- as.factor(meta.dat$subtype) ## CHANGE HERE - note if you don
 
 ## do differentual expression analysis 
 deseq_object <- compute_DE(expression.dat, meta.dat)
-
-
 
 #################################################################################
 ## INPUT TO FUNCTION:
@@ -231,6 +248,9 @@ compute_DE <- function(dat, dat.meta){
     # Supply our experimental variable to `design`
     design = ~subtype ## POSSIBLE CHANGE HERE 
   )
+  # ddset <- estimateSizeFactors(ddset)
+  # dds <- estimateDispersionsGeneEst(ddset)
+  # dispersions(dds) <- mcols(dds)$dispGeneEst
   deseq_object <- DESeq(ddset)
   deseq_results <- results(deseq_object)
   deseq_results <- lfcShrink(
@@ -252,15 +272,25 @@ compute_DE <- function(dat, dat.meta){
   return(deseq_df)
 }
 
-write.table(deseq_object, here("processed-data","disease_deseq_diseasesimplified_results.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
+write.table(deseq_object, here("processed-data","Oct19_cluster1VScluster2_DE_results.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
+
+expressed <- deseq_object[deseq_object$threshold == TRUE,]
+faheem <- expressed[expressed$Gene %in% genes,]
+
+expressed_neg <- expressed[expressed$log2FoldChange < 0,]
+write.table(expressed_neg, here("processed-data","Oct19_cluster2_DE_results.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
+neg_list <- expressed_neg$Gene
+write.table(neg_list, here("processed-data","Oct19_cluster2_genes.tsv"), sep = ",", col.names = FALSE, row.names = FALSE)
+
+expressed_pos <- expressed[expressed$log2FoldChange > 0,]
+write.table(expressed_pos, here("processed-data","Oct19_cluster1_DE_results.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
+pos_list <- expressed_pos$Gene
+write.table(pos_list, here("processed-data","Oct19_cluster1_genes.tsv"), sep = ",", col.names = FALSE, row.names = FALSE)
+
+
 
 deseq_object1 <- deseq_object
 # see if faheems lipid genes are differentially expressed
-
-faheem_genes <- deseq_object[deseq_object$Gene %in% c("CYP51A1","CYP4F2","LDLR","DHCR24","DHCR7","MSMO1","HMGCR","PCSK9"),]
-faheem_genes
-#DHCR7 TRUE
-#DHCR24 FALSE 
 
 mm_hallmark_sets <- msigdbr(
   species = "Homo sapiens", # Replace with species name relevant to your data
@@ -298,7 +328,7 @@ head(gsea_results@result)
 Hresults <- data.frame(gsea_results@result)
 head(Hresults)
 dim(Hresults)
-write.table(Hresults, here("processed-data","H_GSEA_results_clusters.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
+write.table(Hresults, here("processed-data","Oct19_H_Cluster1VSCluster2_GSEA_results.tsv"), sep = "\t", col.names = TRUE, row.names = FALSE)
 ##STOP 
 
 
@@ -321,3 +351,13 @@ gseaGO2 <- GSEA(gene.list,
                 nPerm = 1000, 
                 pvalueCutoff = 0.05,
                 verbose=FALSE)
+
+slus <- c("Cluster1", "Cluster2")
+cluster1 <- meta.dat[meta.dat$Cluster %in% slus,]
+temp <- c("Normo", "Hypo")
+cluster1 <- cluster1[cluster1$endotype_class %in% temp,]
+dim(cluster1)
+chisq.test(cluster1$Cluster, cluster1$endotype_class)
+table(cluster1$endotype_class, cluster1$Cluster)
+chisq.test(meta.dat$endotype_class == "Hypo",meta.dat$Cluster == "Cluster1")
+
